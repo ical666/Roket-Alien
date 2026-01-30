@@ -1,0 +1,17 @@
+{
+  "name": "Roket Alien",
+  "short_name": "Roket",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#2c5364",
+  "theme_color": "#2c5364",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
