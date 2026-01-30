@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Game Edukasi Anak Roket Alien - Tangkap alien dan raih skor tertinggi!">
+    <meta name="theme-color" content="#2c5364">
+    <title>Roket Alien - Game Edukasi</title>
+    
+    <!-- PWA Manifest (Embedded for Single File Deployment) -->
+    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,{"name":"Roket Alien","short_name":"Roket","start_url":".","display":"standalone","background_color":"#2c5364","theme_color":"#2c5364","icons":[{"src":"https://picsum.photos/seed/rocketv2/192/192","sizes":"192x192","type":"image/jpeg"}]}'>
+
+    <style>
+        /* --- RESET & DASAR --- */
+        * { box-sizing: border-box; touch-action: none; user-select: none; -webkit-user-select: none; }
+        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #2c3e50; color: #fff; }
+
+        /* --- UI CONTAINER --- */
+        #game-container {
+            position: relative; width: 100vw; height: 100vh;
+            background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+            overflow: hidden; transition: background 1s ease;
+        }
+
+        /* --- CANVAS --- */
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* --- UI OVERLAYS --- */
+        .ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 10;
+        }
+
+        /* --- HUD --- */
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; padding: 15px;
+            display: flex; flex-direction: column; align-items: center;
+            pointer-events: none; z-index: 5;
+        }
+        .top-row { display: flex; justify-content: space-between; width: 100%; align-items: flex-start; }
+        .score-box {
+            background: rgba(255, 255, 255, 0.95); color: #ff6b6b; padding: 8px 15px;
+            border-radius: 20px; font-size: 1.5rem; font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 3px solid #ffd93d;
+        }
+        .level-badge {
+            background: #ff9f43; color: white; padding: 5px 15px; border-radius: 20px;
+            font-weight: bold; font-size: 1.2rem; border: 3px solid #fff;
+            box-shadow: 0 4px 0 #e58e26; margin-bottom: 10px; animation: pulse 2s infinite;
+        }
+        .audio-btn {
+            pointer-events: auto; background: #ffd93d; border: none; width: 45px; height: 45px;
+            border-radius: 50%; font-size: 20px; cursor: pointer; box-shadow: 0 4px 0 #e6c200;
+        }
+        .audio-btn:active { transform: translateY(4px); box-shadow: none; }
+
+        /* --- LAYAR START & GAME OVER --- */
+        #start-screen, #game-over-screen {
+            background: rgba(0, 0, 0, 0.75); pointer-events: auto; text-align: center;
+            backdrop-filter: blur(5px); padding: 30px; border-radius: 25px;
+            width: 90%; max-width: 400px; border: 4px solid #4ecdc4;
+        }
+        h1 { color: #ffd93d; font-size: 2.5rem; margin-bottom: 10px; text-shadow: 3px 3px 0 #ff6b6b; animation: float 3s ease-in-out infinite; }
+        h2 { font-size: 1.5rem; margin: 10px 0; color: #4ecdc4; }
+        .high-score-display {
+            background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px;
+            margin-bottom: 20px; font-size: 1.1rem; color: #ffd93d;
+        }
+        p { font-size: 1.1rem; margin-bottom: 20px; line-height: 1.5; }
+        .btn-main {
+            background: #4ecdc4; color: white; border: none; padding: 15px 40px;
+            font-size: 1.4rem; border-radius: 50px; cursor: pointer; font-weight: bold;
+            box-shadow: 0 6px 0 #2a9d8f; transition: all 0.2s; text-transform: uppercase;
+        }
+        .btn-main:hover { background: #45b7af; }
+        .btn-main:active { transform: translateY(6px); box-shadow: none; }
+        .hidden { display: none !important; }
+
+        /* --- ANIMASI --- */
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        .floater {
+            position: absolute; color: #ffd93d; font-weight: bold; font-size: 1.8rem;
+            text-shadow: 2px 2px 0 #000; pointer-events: none;
+            animation: floatUp 1.2s ease-out forwards; z-index: 20;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(0.5); }
+            50% { transform: translateY(-30px) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-60px) scale(1); }
+        }
+
+        /* Notifikasi Level */
+        #level-notification {
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 3rem; font-weight: bold; color: #fff;
+            text-shadow: 0 0 10px #ffd93d, 0 0 20px #ff6b6b;
+            opacity: 0; pointer-events: none; transition: opacity 0.5s, transform 0.5s; z-index: 30;
+        }
+        #level-notification.show { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+        <div class="top-row">
+            <div class="score-box">Skor: <span id="scoreVal">0</span></div>
+            <button id="audioToggle" class="audio-btn">🔊</button>
+        </div>
+        <div class="level-badge">Level <span id="levelVal">1</span></div>
+    </div>
+
+    <!-- Notifikasi Level -->
+    <div id="level-notification">LEVEL NAIK! 🚀</div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="ui-layer">
+        <h1>🚀 Roket Alien</h1>
+        <div class="high-score-display">Skor Tertinggi: <span id="startHighScore">0</span></div>
+        <p>Tangkap alien untuk naik level!<br>Level 1: Mudah<br>Level 2: Sedang<br>Level 3: Sulit</p>
+        <button id="startBtn" class="btn-main">MAIN</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="ui-layer hidden">
+        <h1 id="goTitle">Selesai!</h1>
+        <div class="high-score-display" id="newRecordMsg" style="display:none; color:#ff6b6b; border: 2px solid #ff6b6b;">REKOR BARU! 🏆</div>
+        <p>Skor Kamu: <span id="finalScore">0</span></p>
+        <p id="feedbackMsg" style="color: #ffd93d; font-weight: bold;">Hebat!</p>
+        <button id="restartBtn" class="btn-main">MAIN LAGI</button>
+    </div>
+</div>
+
+<script>
+    // --- SETUP DASAR ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const hud = document.getElementById('hud');
+    const scoreEl = document.getElementById('scoreVal');
+    const levelEl = document.getElementById('levelVal');
+    const finalScoreEl = document.getElementById('finalScore');
+    const feedbackMsgEl = document.getElementById('feedbackMsg');
+    const startHighScoreEl = document.getElementById('startHighScore');
+    const newRecordMsg = document.getElementById('newRecordMsg');
+    const levelNotif = document.getElementById('level-notification');
+    
+    let isPlaying = false, score = 0, level = 1, highScore = 0;
+    let animationId, lastTime = 0, spawnTimer = 0, audioEnabled = true;
+    let player, bullets = [], enemies = [], particles = [], stars = [];
+    
+    // --- CONFIG LEVEL ---
+    const LEVEL_CONFIG = {
+        1: { threshold: 0, speedMod: 1.0, spawnRate: 2000, bg: 'linear-gradient(to bottom, #0f2027, #203a43, #2c5364)' },
+        2: { threshold: 100, speedMod: 1.5, spawnRate: 1500, bg: 'linear-gradient(to bottom, #2c3e50, #4ca1af, #c4e0e5)' },
+        3: { threshold: 300, speedMod: 2.2, spawnRate: 1000, bg: 'linear-gradient(to bottom, #451e3e, #632c65, #8e44ad)' }
+    };
+
+    // --- AUDIO SYSTEM ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+
+    function initAudio() {
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playTone(freq, type, duration, vol = 0.1) {
+        if (!audioEnabled || !audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function speak(text) {
+        if (!audioEnabled) return;
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'id-ID'; msg.rate = 1.0; msg.pitch = 1.2;
+        window.speechSynthesis.speak(msg);
+    }
+
+    const sfx = {
+        shoot: () => { playTone(600, 'square', 0.1, 0.05); setTimeout(() => playTone(300, 'square', 0.1, 0.05), 50); },
+        hit: () => { playTone(440, 'sine', 0.3, 0.1); setTimeout(() => playTone(554, 'sine', 0.3, 0.1), 100); setTimeout(() => playTone(659, 'sine', 0.4, 0.1), 200); },
+        levelUp: () => { playTone(523.25, 'triangle', 0.2, 0.2); setTimeout(() => playTone(659.25, 'triangle', 0.2, 0.2), 200); setTimeout(() => playTone(783.99, 'triangle', 0.6, 0.2), 400); speak("Level Naik!"); },
+        win: () => { speak("Hore! Kamu Menang!"); },
+        gameOver: () => { playTone(300, 'sawtooth', 0.5, 0.1); setTimeout(() => playTone(200, 'sawtooth', 0.8, 0.1), 400); },
+        bgmNote: () => {
+            if (!audioEnabled || !isPlaying) return;
+            const notes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 523.25]; 
+            playTone(notes[Math.floor(Math.random() * notes.length)], 'sine', 0.3, 0.02);
+            setTimeout(sfx.bgmNote, 500); 
+        }
+    };
+
+    // --- LOGIC GAME ---
+    function loadHighScore() {
+        const saved = localStorage.getItem('roketAlienHighScore');
+        if (saved) { highScore = parseInt(saved); startHighScoreEl.innerText = highScore; }
+    }
+
+    function checkHighScore() {
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('roketAlienHighScore', highScore);
+            startHighScoreEl.innerText = highScore;
+            return true;
+        }
+        return false;
+    }
+
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; if(player) player.y = canvas.height - 100; }
+    window.addEventListener('resize', resize); resize();
+
+    // --- KELAS ---
+    class Player {
+        constructor() { this.width = 60; this.height = 80; this.x = canvas.width / 2; this.y = canvas.height - 100; this.lastShot = 0; this.shootDelay = 400; }
+        update(dt) {
+            if (Date.now() - this.lastShot > this.shootDelay) {
+                bullets.push(new Bullet(this.x, this.y - this.height/2));
+                sfx.shoot(); this.lastShot = Date.now();
+            }
+        }
+        draw() {
+            ctx.save(); ctx.translate(this.x, this.y);
+            ctx.fillStyle = '#ff6b6b'; ctx.beginPath(); ctx.ellipse(0, 0, 20, 40, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#87CEEB'; ctx.beginPath(); ctx.arc(0, -10, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ff8787'; ctx.beginPath(); ctx.moveTo(-15, 10); ctx.lineTo(-30, 40); ctx.lineTo(-10, 30); ctx.fill(); ctx.beginPath(); ctx.moveTo(15, 10); ctx.lineTo(30, 40); ctx.lineTo(10, 30); ctx.fill();
+            ctx.fillStyle = `rgba(255, 215, 0, ${0.5 + Math.random() * 0.5})`; ctx.beginPath(); ctx.moveTo(-10, 35); ctx.lineTo(0, 60 + Math.random() * 20); ctx.lineTo(10, 35); ctx.fill();
+            ctx.restore();
+        }
+    }
+    class Bullet { constructor(x, y) { this.x = x; this.y = y; this.radius = 5; this.speed = 10; this.markedForDeletion = false; }
+        update() { this.y -= this.speed; if (this.y < 0) this.markedForDeletion = true; }
+        draw() { ctx.fillStyle = '#ffd93d'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffd93d'; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; }
+    }
+    class Enemy {
+        constructor() {
+            this.radius = 25 + Math.random() * 10; this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius; this.y = -50;
+            this.speed = (1 + Math.random() * 1.5) * LEVEL_CONFIG[level].speedMod; this.markedForDeletion = false; this.angle = 0;
+            if (level === 1) this.color = '#4ecdc4'; else if (level === 2) this.color = '#a8e6cf'; else this.color = '#ff9ff3';
+        }
+        update() { this.y += this.speed; this.angle += 0.05; if (this.y > canvas.height + 50) { this.markedForDeletion = true; gameOver(); } }
+        draw() {
+            ctx.save(); ctx.translate(this.x, this.y); ctx.fillStyle = this.color;
+            const wobble = Math.sin(this.angle) * 5; ctx.ellipse(wobble, 0, this.radius, this.radius * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(-8, -5, 8, 0, Math.PI * 2); ctx.arc(8, -5, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(-8, -5, 3, 0, Math.PI * 2); ctx.arc(8, -5, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = 'black'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 5, 10, 0, Math.PI, false); ctx.stroke();
+            ctx.restore();
+        }
+    }
+    class Particle {
+        constructor(x, y, color) { this.x = x; this.y = y; this.size = Math.random() * 8 + 4; this.speedX = Math.random() * 6 - 3; this.speedY = Math.random() * 6 - 3; this.color = color; this.life = 1; this.markedForDeletion = false; }
+        update() { this.x += this.speedX; this.y += this.speedY; this.life -= 0.02; if (this.life <= 0) this.markedForDeletion = true; }
+        draw() {
+            ctx.save(); ctx.globalAlpha = this.life; ctx.fillStyle = this.color; ctx.translate(this.x, this.y); ctx.beginPath();
+            for(let i=0; i<5; i++){ ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*this.size, -Math.sin((18+i*72)/180*Math.PI)*this.size); ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*(this.size/2), -Math.sin((54+i*72)/180*Math.PI)*(this.size/2)); } ctx.closePath(); ctx.fill(); ctx.restore();
+        }
+    }
+    class Star { constructor() { this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height; this.size = Math.random() * 2; this.speed = Math.random() * 0.5 + 0.1; } update() { this.y += this.speed; if(this.y > canvas.height) { this.y = 0; this.x = Math.random() * canvas.width; } } draw() { ctx.fillStyle = 'white'; ctx.fillRect(this.x, this.y, this.size, this.size); } }
+
+    // --- INPUT & GAMEPLAY ---
+    function handleInput(e) {
+        if (!isPlaying) return; e.preventDefault();
+        let clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        player.x = clientX;
+        if (player.x < player.width/2) player.x = player.width/2;
+        if (player.x > canvas.width - player.width/2) player.x = canvas.width - player.width/2;
+    }
+    window.addEventListener('mousemove', handleInput);
+    window.addEventListener('touchmove', handleInput, {passive: false});
+    window.addEventListener('touchstart', handleInput, {passive: false});
+
+    function checkLevelUp() {
+        let prevLevel = level;
+        if (score >= LEVEL_CONFIG[3].threshold) level = 3;
+        else if (score >= LEVEL_CONFIG[2].threshold) level = 2;
+        else level = 1;
+        levelEl.innerText = level;
+        document.getElementById('game-container').style.background = LEVEL_CONFIG[level].bg;
+        if (level > prevLevel) { sfx.levelUp(); levelNotif.classList.add('show'); setTimeout(() => levelNotif.classList.remove('show'), 2000); }
+    }
+
+    function initGame() {
+        player = new Player(); bullets = []; enemies = []; particles = []; score = 0; level = 1;
+        scoreEl.innerText = score; levelEl.innerText = level;
+        document.getElementById('game-container').style.background = LEVEL_CONFIG[1].bg;
+        stars = []; for(let i=0; i<50; i++) stars.push(new Star());
+    }
+
+    function spawnEnemy(deltaTime) {
+        if (spawnTimer > LEVEL_CONFIG[level].spawnRate) { enemies.push(new Enemy()); spawnTimer = 0; }
+        else { spawnTimer += deltaTime; }
+    }
+
+    function checkCollisions() {
+        bullets.forEach(bullet => {
+            enemies.forEach(enemy => {
+                if (!bullet.markedForDeletion && !enemy.markedForDeletion) {
+                    const dx = bullet.x - enemy.x; const dy = bullet.y - enemy.y;
+                    if (Math.sqrt(dx * dx + dy * dy) < bullet.radius + enemy.radius) {
+                        bullet.markedForDeletion = true; enemy.markedForDeletion = true;
+                        sfx.hit();
+                        for(let i=0; i<8; i++) particles.push(new Particle(enemy.x, enemy.y, enemy.color));
+                        const text = ["Hebat!","Pintar!","Mantap!","Keren!","Ayo!","Juara!"][Math.floor(Math.random()*6)];
+                        const el = document.createElement('div'); el.className = 'floater'; el.innerText = text; el.style.left = enemy.x + 'px'; el.style.top = enemy.y + 'px';
+                        document.getElementById('game-container').appendChild(el); setTimeout(() => el.remove(), 1000);
+                        score += 10; scoreEl.innerText = score; checkLevelUp();
+                    }
+                }
+            });
+        });
+    }
+
+    function gameOver() {
+        isPlaying = false; sfx.gameOver();
+        const isNewRecord = checkHighScore();
+        hud.classList.add('hidden'); gameOverScreen.classList.remove('hidden'); finalScoreEl.innerText = score;
+        if (isNewRecord) { newRecordMsg.style.display = 'block'; sfx.win(); feedbackMsgEl.innerText = "Luar Biasa Rekor Baru!"; }
+        else { newRecordMsg.style.display = 'none'; feedbackMsgEl.innerText = score < 50 ? "Belajar lagi yuk! 🚀" : (score < 150 ? "Hebat! Kamu Pintar! 🌟" : "Keren! Coba lagi ya! 🏆"); }
+    }
+
+    function animate(timestamp) {
+        if (!isPlaying) return;
+        const deltaTime = timestamp - lastTime; lastTime = timestamp; ctx.clearRect(0, 0, canvas.width, canvas.height);
+        stars.forEach(s => { s.update(); s.draw(); }); player.update(deltaTime); player.draw();
+        bullets.forEach(obj => { obj.update(); obj.draw(); }); bullets = bullets.filter(obj => !obj.markedForDeletion);
+        spawnEnemy(deltaTime); enemies.forEach(obj => { obj.update(); obj.draw(); }); enemies = enemies.filter(obj => !obj.markedForDeletion);
+        particles.forEach(obj => { obj.update(); obj.draw(); }); particles = particles.filter(obj => !obj.markedForDeletion);
+        checkCollisions(); requestAnimationFrame(animate);
+    }
+
+    // --- STARTUP ---
+    loadHighScore();
+    document.getElementById('startBtn').addEventListener('click', () => {
+        initAudio(); sfx.bgmNote(); startScreen.classList.add('hidden'); hud.classList.remove('hidden'); initGame(); isPlaying = true; lastTime = performance.now(); animate(lastTime);
+    });
+    document.getElementById('restartBtn').addEventListener('click', () => {
+        gameOverScreen.classList.add('hidden'); hud.classList.remove('hidden'); initGame(); isPlaying = true; lastTime = performance.now(); animate(lastTime);
+    });
+    document.getElementById('audioToggle').addEventListener('click', () => {
+        audioEnabled = !audioEnabled; document.getElementById('audioToggle').innerText = audioEnabled ? '🔊' : '🔇';
+        if(audioEnabled && isPlaying) sfx.bgmNote(); else window.speechSynthesis.cancel();
+    });
+
+    // --- SERVICE WORKER (Offline Support) ---
+    if ('serviceWorker' in navigator) {
+        const swCode = `const CACHE_NAME='roket-alien-v2';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(['./',location.href]))));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
+        const blob = new Blob([swCode], {type: 'application/javascript'});
+        navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(console.error);
+    }
+</script>
+</body>
+</html>
